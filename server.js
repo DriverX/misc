@@ -1,15 +1,23 @@
-var	http = require('http'),
-	fs = require('fs'),
-	path = require('path');
+var
+  http = require('http'),
+  fs = require('fs'),
+  path = require('path'),
+  url = require('url');
 
 function main() {
-	http.createServer(function(request, response) {
+  var
+    PORT = 8080;
+
+	var server = http.createServer(function(request, response) {
 		console.log('requesting "%s"', request.url);
 		
+    var urlParts = url.parse( request.url );
+
 		var root = ".";
-		var filePath = '.' + request.url;
-		if (filePath === './')
+		var filePath = path.join( '.', urlParts.pathname );
+		if (filePath === './') {
 			filePath = './index.html';
+    }
 	
 		var extname = path.extname(filePath);
 		var contentType = 'text/html';
@@ -43,9 +51,11 @@ function main() {
 			}
 		});
 	
-	}).listen(80);
+	});
+
+  server.listen( PORT );
 	
-	console.log('Server running at http://127.0.0.1:80/');
+	console.log('Server running at http://127.0.0.1:' + PORT + '/');
 }
 
 main();
