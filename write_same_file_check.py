@@ -3,7 +3,7 @@ from itertools import takewhile
 
 def main():
     start_byte = 0
-    read_byte = 10
+    read_byte = 5000
     with open("same_file.txt") as f:
         while True:
             entry = f.read(read_byte)

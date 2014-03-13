@@ -5,6 +5,7 @@ import string
 import random
 import time
 from binascii import hexlify
+import multiprocessing as mp
 
 
 def _reseed_random():
@@ -21,12 +22,15 @@ def _reseed_random():
     random.seed(seed)
 
 
-def child_init(f, word):
+def child_init(f, word, lock):
     _reseed_random()
 
-    s = word * 10
+    s = word * 5000
     while True:
-        f.write(s)
+        with lock:
+            f.write(s)
+        # f.write(s)
+        f.flush()
         time.sleep(int(random.uniform(0.1, 0.5) * 100) / 100)
     
 
@@ -34,10 +38,12 @@ def main():
     words = string.ascii_lowercase
     open("same_file.txt", "w").close()
     # f = open("same_file.txt", "a")
-    for i in xrange(10):
+    lock = mp.Lock()
+    for i in xrange(20):
         child_pid = os.fork()
         if not child_pid:
-            child_init(open("same_file.txt", "a"), words[i])
+            f = open("same_file.txt", "a")
+            child_init(f, words[i], lock)
             return
 
     os.wait()
