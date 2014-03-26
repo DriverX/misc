@@ -7,6 +7,7 @@ import signal
 from functools import partial
 
 task_id = None
+children = {}
 
 
 def sock_handler(sock, fd, events):
@@ -23,6 +24,18 @@ def child_init(id, sock):
 
     ioloop = IOLoop.instance()
     ioloop.add_handler(sock.fileno(), partial(sock_handler, sock), ioloop.READ)
+    PeriodicCallback(lambda: 1, 1000).start()
+
+    def stop(sig, frame):
+        ioloop.add_callback_from_signal(safe_stop)
+
+    def safe_stop():
+        print task_id, os.getpid()
+        ioloop.stop()
+        sys.exit()
+
+    signal.signal(signal.SIGINT, stop)
+    signal.signal(signal.SIGTERM, stop)
     ioloop.start()
 
 
@@ -35,6 +48,25 @@ def master_check_send(socks, fd, events):
             print i, e
 
 
+def check_childs():
+    for pid in children.keys():
+        _pid, status = os.waitpid(pid, os.WNOHANG)
+        if _pid == 0:
+            continue
+        if os.WIFSIGNALED(status):
+            if os.WTERMSIG(status) in (signal.SIGTERM, signal.SIGINT):
+                continue
+            else:
+                print("child (pid %d) killed by signal %d, restarting" % (
+                    pid, os.WTERMSIG(status)))
+        elif os.WEXITSTATUS(status) != 0:
+            print("child (pid %d) exited with status %d, restarting" % (
+                pid, os.WEXITSTATUS(status)))
+        else:
+            print("child (pid %d) exited normally" % (pid,))
+        children.pop(pid)
+
+
 def main():
     socks = []
 
@@ -45,14 +77,23 @@ def main():
             socks = None
             child_init(i, sock_recv)
             return
+        children[child_pid] = i
         socks.append(sock_send)
     
     ioloop = IOLoop.instance()
     cb = stack_context.wrap(partial(master_check_send, socks))
     ioloop.add_handler(sys.stdin.fileno(), cb, ioloop.READ)
-    
+
+    PeriodicCallback(check_childs, 5000).start()
+
     def stop(sig, frame):
         ioloop.add_callback(ioloop.stop)
+        for pid in children.keys():
+            try:
+                os.kill(pid, signal.SIGINT)
+            except:
+                pass
+
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
     ioloop.start()
